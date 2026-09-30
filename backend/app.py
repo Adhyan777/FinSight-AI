@@ -1,27 +1,43 @@
 from flask import Flask, jsonify, request
+from pathlib import Path
 import sys
-import os
 import importlib
 import pandas as pd
 
 # ============================================================
-# PYTHON PATH
+# PATHS
 # ============================================================
 
-PROJECT_ROOT = os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__))
-)
+BASE_DIR = Path(__file__).resolve().parent.parent
+SRC_DIR = BASE_DIR / "src"
+DATA_PATH = BASE_DIR / "data" / "transactions.csv"
 
-SRC_PATH = os.path.join(
-    PROJECT_ROOT,
-    "src"
-)
-
-sys.path.append(SRC_PATH)
+if str(SRC_DIR) not in sys.path:
+    sys.path.append(str(SRC_DIR))
 
 
 # ============================================================
-# IMPORT MODULES
+# DATABASE
+# ============================================================
+
+from database import (
+    initialize_database,
+    import_csv_if_database_empty,
+    replace_transactions,
+    get_transactions,
+)
+
+
+# ============================================================
+# DATABASE MUST BE INITIALIZED BEFORE ANALYTICS IMPORTS
+# ============================================================
+
+initialize_database()
+import_csv_if_database_empty(DATA_PATH)
+
+
+# ============================================================
+# ANALYTICS / ML MODULES
 # ============================================================
 
 import analytics
@@ -30,340 +46,158 @@ import expense_forecasting
 import spending_clustering
 import ai_assistant
 
-from database import (
-    initialize_database,
-    import_csv_if_database_empty,
-    replace_transactions,
-    get_transactions
-)
-
 
 # ============================================================
-# APP
+# FLASK APP
 # ============================================================
 
 app = Flask(__name__)
 
-app.config["CLOUD_MODE"] = (
-    os.getenv("CLOUD_MODE", "false").lower() == "true"
-)
-
 
 # ============================================================
-# DATA PATH
-# ============================================================
-
-DATA_PATH = os.path.join(
-    PROJECT_ROOT,
-    "data",
-    "transactions.csv"
-)
-
-
-# ============================================================
-# DATABASE INITIALIZATION
-# ============================================================
-
-initialize_database()
-
-import_csv_if_database_empty(
-    DATA_PATH
-)
-
-
-# ============================================================
-# CORS
-# ============================================================
-
-@app.after_request
-def add_cors_headers(response):
-
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
-    response.headers["Access-Control-Allow-Methods"] = (
-        "GET, POST, OPTIONS"
-    )
-
-    return response
-
-
-# ============================================================
-# HOME
+# HEALTH CHECK
 # ============================================================
 
 @app.route("/")
 def home():
+    return jsonify({
+        "message": "FinSight AI backend is running",
+        "status": "success"
+    })
 
-    return {
-        "message": "FinSight AI backend is running"
-    }
+
+@app.route("/api/health")
+def health():
+    return jsonify({
+        "status": "healthy"
+    })
 
 
 # ============================================================
 # ANALYTICS
 # ============================================================
 
-@app.route("/api/analytics")
+@app.route("/api/analytics", methods=["GET"])
 def get_analytics():
+    try:
+        result = analytics.get_analytics()
 
-    return jsonify({
+        if hasattr(result, "to_dict"):
+            result = result.to_dict()
 
-        "total_income":
-            float(analytics.total_income),
+        return jsonify(result)
 
-        "total_expenses":
-            float(analytics.total_expenses),
-
-        "total_savings":
-            float(analytics.total_savings),
-
-        "savings_rate":
-            float(
-                round(
-                    analytics.savings_rate,
-                    2
-                )
-            ),
-
-        "monthly_expenses": {
-
-            str(month): float(amount)
-
-            for month, amount
-            in analytics.monthly_expenses.items()
-
-        },
-
-        "category_expenses": {
-
-            str(category): float(amount)
-
-            for category, amount
-            in analytics.category_expenses.items()
-
-        },
-
-        "highest_spending_category": {
-
-            "category":
-                str(
-                    analytics.highest_category
-                ),
-
-            "amount":
-                float(
-                    analytics.highest_category_amount
-                )
-
-        },
-
-        "largest_transaction": {
-
-            "description":
-                str(
-                    analytics.largest_transaction[
-                        "description"
-                    ]
-                ),
-
-            "amount":
-                float(
-                    analytics.largest_transaction[
-                        "amount"
-                    ]
-                ),
-
-            "category":
-                str(
-                    analytics.largest_transaction[
-                        "category"
-                    ]
-                )
-
-        }
-
-    })
+    except Exception as e:
+        return jsonify({
+            "error": str(e)
+        }), 500
 
 
 # ============================================================
 # TRANSACTIONS
 # ============================================================
 
-@app.route("/api/transactions")
-def api_transactions():
-
-    return jsonify(
-        get_transactions()
-    )
-
-
-# ============================================================
-# ANOMALIES
-# ============================================================
-
-@app.route("/api/anomalies")
-def get_anomalies():
-
-    return jsonify([
-
-        {
-            "date":
-                str(row["date"]),
-
-            "description":
-                str(row["description"]),
-
-            "category":
-                str(row["category"]),
-
-            "amount":
-                float(row["amount"]),
-
-            "payment_method":
-                str(row["payment_method"])
-
-        }
-
-        for _, row
-        in anomaly_detection.anomalies.iterrows()
-
-    ])
-
-
-# ============================================================
-# FORECAST
-# ============================================================
-
-@app.route("/api/forecast")
-def get_forecast():
-
-    return jsonify({
-
-        "predicted_expense":
-            float(
-                round(
-                    expense_forecasting.predicted_expense,
-                    2
-                )
-            )
-
-    })
-
-
-# ============================================================
-# CLUSTERS
-# ============================================================
-
-@app.route("/api/clusters")
-def get_clusters():
-
-    return jsonify({
-
-        "summary": [
-
-            {
-                "cluster":
-                    int(cluster),
-
-                "count":
-                    int(row["count"]),
-
-                "mean":
-                    float(row["mean"]),
-
-                "min":
-                    float(row["min"]),
-
-                "max":
-                    float(row["max"])
-
-            }
-
-            for cluster, row
-            in spending_clustering.cluster_summary.iterrows()
-
-        ],
-
-        "transactions": [
-
-            {
-                "date":
-                    str(row["date"]),
-
-                "description":
-                    str(row["description"]),
-
-                "category":
-                    str(row["category"]),
-
-                "amount":
-                    float(row["amount"]),
-
-                "cluster":
-                    int(row["cluster"])
-
-            }
-
-            for _, row
-            in spending_clustering.expense_df.iterrows()
-
-        ]
-
-    })
-
-
-# ============================================================
-# AI FINANCIAL Q&A
-# ============================================================
-
-@app.route(
-    "/api/ask",
-    methods=["POST"]
-)
-def ask_financial_question():
-
-    data = request.get_json()
-
-    if not data or "question" not in data:
-
-        return jsonify({
-            "error": "Question is required."
-        }), 400
-
-    question = data["question"].strip()
-
-    if not question:
-
-        return jsonify({
-            "error": "Question cannot be empty."
-        }), 400
-
+@app.route("/api/transactions", methods=["GET"])
+def transactions():
     try:
+        data = get_transactions()
 
-        answer = ai_assistant.ask_ai(
-            question
-        )
+        return jsonify(data)
+
+    except Exception as e:
+        return jsonify({
+            "error": str(e)
+        }), 500
+
+
+# ============================================================
+# ANOMALY DETECTION
+# ============================================================
+
+@app.route("/api/anomalies", methods=["GET"])
+def anomalies():
+    try:
+        result = anomaly_detection.detect_anomalies()
+
+        if hasattr(result, "to_dict"):
+            result = result.to_dict(orient="records")
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({
+            "error": str(e)
+        }), 500
+
+
+# ============================================================
+# EXPENSE FORECAST
+# ============================================================
+
+@app.route("/api/forecast", methods=["GET"])
+def forecast():
+    try:
+        result = expense_forecasting.forecast_expenses()
+
+        if hasattr(result, "to_dict"):
+            result = result.to_dict()
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({
+            "error": str(e)
+        }), 500
+
+
+# ============================================================
+# SPENDING CLUSTERS
+# ============================================================
+
+@app.route("/api/clusters", methods=["GET"])
+def clusters():
+    try:
+        result = spending_clustering.cluster_spending()
+
+        if hasattr(result, "to_dict"):
+            result = result.to_dict(orient="records")
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({
+            "error": str(e)
+        }), 500
+
+
+# ============================================================
+# AI ASSISTANT
+# ============================================================
+
+@app.route("/api/ask", methods=["POST"])
+def ask_ai():
+    try:
+        data = request.get_json(silent=True) or {}
+
+        question = data.get("question", "").strip()
+
+        if not question:
+            return jsonify({
+                "error": "Question is required"
+            }), 400
+
+        result = ai_assistant.ask_question(question)
+
+        if isinstance(result, dict):
+            return jsonify(result)
 
         return jsonify({
-
-            "question":
-                question,
-
-            "answer":
-                answer
-
+            "answer": result
         })
 
     except Exception as e:
-
         return jsonify({
-
-            "error":
-                "Unable to generate AI response.",
-
-            "details":
-                str(e)
-
+            "error": str(e)
         }), 500
 
 
@@ -371,36 +205,25 @@ def ask_financial_question():
 # CSV UPLOAD
 # ============================================================
 
-@app.route(
-    "/api/upload",
-    methods=["POST"]
-)
-def upload_transactions():
-
-    if "file" not in request.files:
-
-        return jsonify({
-            "error":
-                "No CSV file was uploaded."
-        }), 400
-
-    file = request.files["file"]
-
-    if file.filename == "":
-
-        return jsonify({
-            "error":
-                "No file was selected."
-        }), 400
-
-    if not file.filename.lower().endswith(".csv"):
-
-        return jsonify({
-            "error":
-                "Only CSV files are supported."
-        }), 400
-
+@app.route("/api/upload", methods=["POST"])
+def upload_csv():
     try:
+        if "file" not in request.files:
+            return jsonify({
+                "error": "No file uploaded"
+            }), 400
+
+        file = request.files["file"]
+
+        if file.filename == "":
+            return jsonify({
+                "error": "No file selected"
+            }), 400
+
+        if not file.filename.lower().endswith(".csv"):
+            return jsonify({
+                "error": "Only CSV files are supported"
+            }), 400
 
         uploaded_df = pd.read_csv(file)
 
@@ -414,202 +237,70 @@ def upload_transactions():
         ]
 
         missing_columns = [
-
             column
-
-            for column
-            in required_columns
-
+            for column in required_columns
             if column not in uploaded_df.columns
-
         ]
 
         if missing_columns:
-
             return jsonify({
-
-                "error":
-                    "CSV is missing required columns.",
-
-                "missing_columns":
-                    missing_columns
-
+                "error": "Missing required columns",
+                "missing_columns": missing_columns
             }), 400
-
-        # ----------------------------------------------------
-        # DATE VALIDATION
-        # ----------------------------------------------------
 
         uploaded_df["date"] = pd.to_datetime(
             uploaded_df["date"],
             errors="coerce"
         )
 
-        if uploaded_df["date"].isnull().any():
-
+        if uploaded_df["date"].isna().any():
             return jsonify({
-
-                "error":
-                    "CSV contains invalid dates."
-
+                "error": "Some dates in the CSV are invalid"
             }), 400
-
-        # ----------------------------------------------------
-        # AMOUNT VALIDATION
-        # ----------------------------------------------------
 
         uploaded_df["amount"] = pd.to_numeric(
             uploaded_df["amount"],
             errors="coerce"
         )
 
-        if uploaded_df["amount"].isnull().any():
-
+        if uploaded_df["amount"].isna().any():
             return jsonify({
-
-                "error":
-                    "CSV contains invalid amounts."
-
+                "error": "Some amounts in the CSV are invalid"
             }), 400
 
-        # ----------------------------------------------------
-        # TYPE VALIDATION
-        # ----------------------------------------------------
+        uploaded_df["date"] = uploaded_df["date"].dt.strftime("%Y-%m-%d")
 
-        uploaded_df["type"] = (
-            uploaded_df["type"]
-            .astype(str)
-            .str.lower()
-        )
+        DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+        uploaded_df.to_csv(DATA_PATH, index=False)
 
-        valid_types = {
-            "income",
-            "expense"
-        }
+        replace_transactions(uploaded_df)
 
-        invalid_types = (
-            set(uploaded_df["type"])
-            - valid_types
-        )
-
-        if invalid_types:
-
-            return jsonify({
-
-                "error":
-                    "CSV contains invalid transaction types.",
-
-                "invalid_types":
-                    list(invalid_types)
-
-            }), 400
-
-        # ----------------------------------------------------
-        # REMOVE DUPLICATES
-        # ----------------------------------------------------
-
-        uploaded_df = (
-            uploaded_df
-            .drop_duplicates()
-            .copy()
-        )
-
-        # ----------------------------------------------------
-        # NORMALIZE DATE
-        # ----------------------------------------------------
-
-        uploaded_df["date"] = (
-            uploaded_df["date"]
-            .dt.strftime("%Y-%m-%d")
-        )
-
-        # ----------------------------------------------------
-        # SAVE CSV
-        # ----------------------------------------------------
-
-        uploaded_df.to_csv(
-            DATA_PATH,
-            index=False
-        )
-
-        # ----------------------------------------------------
-        # SAVE TO SQLITE
-        # ----------------------------------------------------
-
-        replace_transactions(
-            uploaded_df
-        )
-
-        # ----------------------------------------------------
-        # REFRESH ANALYSIS
-        # ----------------------------------------------------
-
-        importlib.reload(
-            analytics
-        )
-
-        importlib.reload(
-            anomaly_detection
-        )
-
-        importlib.reload(
-            expense_forecasting
-        )
-
-        importlib.reload(
-            spending_clustering
-        )
-
-        importlib.reload(
-            ai_assistant
-        )
-
-        # ----------------------------------------------------
-        # RESPONSE
-        # ----------------------------------------------------
+        importlib.reload(analytics)
+        importlib.reload(anomaly_detection)
+        importlib.reload(expense_forecasting)
+        importlib.reload(spending_clustering)
+        importlib.reload(ai_assistant)
 
         return jsonify({
-
-            "message":
-                "Transactions uploaded and database updated successfully.",
-
-            "transactions":
-                int(
-                    len(uploaded_df)
-                ),
-
-            "columns":
-                list(
-                    uploaded_df.columns
-                ),
-
-            "database_updated":
-                True,
-
-            "analysis_refreshed":
-                True
-
+            "message": "Transactions uploaded successfully.",
+            "transactions": len(uploaded_df),
+            "database_updated": True,
+            "analysis_refreshed": True
         })
 
     except Exception as e:
-
         return jsonify({
-
-            "error":
-                "Unable to process CSV file.",
-
-            "details":
-                str(e)
-
+            "error": str(e)
         }), 500
 
 
 # ============================================================
-# START SERVER
+# RUN APPLICATION
 # ============================================================
 
 if __name__ == "__main__":
-
     app.run(
+        host="0.0.0.0",
+        port=5000,
         debug=True
     )
