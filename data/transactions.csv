@@ -1,0 +1,79 @@
+date,description,category,type,amount,payment_method
+2026-01-02,Monthly Salary,Income,income,75000,Bank Transfer
+2026-01-03,Rent,Housing,expense,18000,Bank Transfer
+2026-01-04,Electricity Bill,Utilities,expense,2200,UPI
+2026-01-05,Grocery Store,Groceries,expense,3200,UPI
+2026-01-07,Coffee Shop,Food,expense,280,UPI
+2026-01-09,Online Shopping,Shopping,expense,1850,Credit Card
+2026-01-12,Restaurant,Food,expense,950,UPI
+2026-01-15,Internet Bill,Utilities,expense,999,UPI
+2026-01-18,Fuel,Transport,expense,2500,UPI
+2026-01-21,Movie,Entertainment,expense,600,Credit Card
+2026-01-24,Grocery Store,Groceries,expense,2800,UPI
+2026-01-27,Gym Membership,Health,expense,1800,Credit Card
+2026-01-29,Restaurant,Food,expense,1200,UPI
+2026-02-01,Monthly Salary,Income,income,75000,Bank Transfer
+2026-02-02,Rent,Housing,expense,18000,Bank Transfer
+2026-02-04,Grocery Store,Groceries,expense,3500,UPI
+2026-02-06,Coffee Shop,Food,expense,320,UPI
+2026-02-08,Online Shopping,Shopping,expense,4200,Credit Card
+2026-02-11,Electricity Bill,Utilities,expense,2100,UPI
+2026-02-13,Restaurant,Food,expense,1100,UPI
+2026-02-16,Fuel,Transport,expense,2800,UPI
+2026-02-18,Concert,Entertainment,expense,2500,Credit Card
+2026-02-21,Grocery Store,Groceries,expense,3100,UPI
+2026-02-24,Internet Bill,Utilities,expense,999,UPI
+2026-02-27,Pharmacy,Health,expense,750,UPI
+2026-02-28,Restaurant,Food,expense,1350,UPI
+2026-03-01,Monthly Salary,Income,income,75000,Bank Transfer
+2026-03-02,Rent,Housing,expense,18000,Bank Transfer
+2026-03-04,Grocery Store,Groceries,expense,3600,UPI
+2026-03-06,Coffee Shop,Food,expense,350,UPI
+2026-03-08,Online Shopping,Shopping,expense,2800,Credit Card
+2026-03-10,Electricity Bill,Utilities,expense,2400,UPI
+2026-03-12,Restaurant,Food,expense,1450,UPI
+2026-03-15,Fuel,Transport,expense,3000,UPI
+2026-03-18,Streaming Subscription,Entertainment,expense,649,Credit Card
+2026-03-21,Grocery Store,Groceries,expense,3300,UPI
+2026-03-24,Internet Bill,Utilities,expense,999,UPI
+2026-03-26,Doctor Visit,Health,expense,1800,UPI
+2026-03-29,Restaurant,Food,expense,1600,UPI
+2026-04-01,Monthly Salary,Income,income,75000,Bank Transfer
+2026-04-02,Rent,Housing,expense,18000,Bank Transfer
+2026-04-04,Grocery Store,Groceries,expense,3800,UPI
+2026-04-06,Coffee Shop,Food,expense,400,UPI
+2026-04-09,Online Shopping,Shopping,expense,5100,Credit Card
+2026-04-11,Electricity Bill,Utilities,expense,2300,UPI
+2026-04-14,Restaurant,Food,expense,1550,UPI
+2026-04-17,Fuel,Transport,expense,3200,UPI
+2026-04-20,Travel Booking,Travel,expense,8500,Credit Card
+2026-04-23,Grocery Store,Groceries,expense,3400,UPI
+2026-04-26,Internet Bill,Utilities,expense,999,UPI
+2026-04-28,Pharmacy,Health,expense,900,UPI
+2026-04-30,Restaurant,Food,expense,1700,UPI
+2026-05-01,Monthly Salary,Income,income,75000,Bank Transfer
+2026-05-02,Rent,Housing,expense,18000,Bank Transfer
+2026-05-04,Grocery Store,Groceries,expense,3900,UPI
+2026-05-07,Coffee Shop,Food,expense,450,UPI
+2026-05-09,Online Shopping,Shopping,expense,6500,Credit Card
+2026-05-11,Electricity Bill,Utilities,expense,2500,UPI
+2026-05-14,Restaurant,Food,expense,1750,UPI
+2026-05-17,Fuel,Transport,expense,3400,UPI
+2026-05-20,Flight Booking,Travel,expense,12500,Credit Card
+2026-05-23,Grocery Store,Groceries,expense,3600,UPI
+2026-05-26,Internet Bill,Utilities,expense,999,UPI
+2026-05-28,Pharmacy,Health,expense,850,UPI
+2026-05-30,Restaurant,Food,expense,1850,UPI
+2026-06-01,Monthly Salary,Income,income,75000,Bank Transfer
+2026-06-02,Rent,Housing,expense,18000,Bank Transfer
+2026-06-04,Grocery Store,Groceries,expense,4100,UPI
+2026-06-06,Coffee Shop,Food,expense,500,UPI
+2026-06-08,Online Shopping,Shopping,expense,7200,Credit Card
+2026-06-10,Electricity Bill,Utilities,expense,2600,UPI
+2026-06-13,Restaurant,Food,expense,1900,UPI
+2026-06-16,Fuel,Transport,expense,3500,UPI
+2026-06-19,Hotel Booking,Travel,expense,14500,Credit Card
+2026-06-22,Grocery Store,Groceries,expense,3700,UPI
+2026-06-25,Internet Bill,Utilities,expense,999,UPI
+2026-06-27,Pharmacy,Health,expense,950,UPI
+2026-06-29,Restaurant,Food,expense,2100,UPI
