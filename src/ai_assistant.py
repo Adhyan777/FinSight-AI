@@ -6,7 +6,7 @@ from database import get_connection
 
 
 # ============================================================
-# LOAD TRANSACTIONS FROM DATABASE
+# LOAD TRANSACTIONS
 # ============================================================
 
 def load_transactions():
@@ -29,50 +29,25 @@ def load_transactions():
     finally:
         connection.close()
 
-    df["date"] = pd.to_datetime(
-        df["date"],
-        errors="coerce"
-    )
-
-    df["amount"] = pd.to_numeric(
-        df["amount"],
-        errors="coerce"
-    )
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df["amount"] = pd.to_numeric(df["amount"], errors="coerce")
 
     return df
 
 
 # ============================================================
-# BUILD FINANCIAL CONTEXT
+# CLOUD QUESTION ANSWERING
 # ============================================================
 
-def build_financial_context():
-
+def answer_cloud_question(question):
     df = load_transactions()
 
-    # --------------------------------------------------------
-    # SEPARATE INCOME AND EXPENSES
-    # --------------------------------------------------------
-
-    income_df = df[
-        df["type"] == "income"
-    ].copy()
-
-    expense_df = df[
-        df["type"] == "expense"
-    ].copy()
-
-    # --------------------------------------------------------
-    # FINANCIAL SUMMARY
-    # --------------------------------------------------------
+    income_df = df[df["type"] == "income"].copy()
+    expense_df = df[df["type"] == "expense"].copy()
 
     total_income = income_df["amount"].sum()
-
     total_expenses = expense_df["amount"].sum()
-
-    total_savings = (
-        total_income - total_expenses
-    )
+    total_savings = total_income - total_expenses
 
     savings_rate = (
         (total_savings / total_income) * 100
@@ -80,56 +55,238 @@ def build_financial_context():
         else 0
     )
 
-    # --------------------------------------------------------
-    # CATEGORY SPENDING
-    # --------------------------------------------------------
-
     category_expenses = (
         expense_df
         .groupby("category")["amount"]
         .sum()
-        .sort_values(
-            ascending=False
-        )
+        .sort_values(ascending=False)
     )
 
-    category_text = "\n".join(
-        [
-            f"{category}: ₹{amount:,.2f}"
-            for category, amount
-            in category_expenses.items()
-        ]
+    monthly_expenses = (
+        expense_df
+        .assign(month=expense_df["date"].dt.to_period("M").astype(str))
+        .groupby("month")["amount"]
+        .sum()
     )
+
+    largest_transaction = expense_df.loc[
+        expense_df["amount"].idxmax()
+    ]
+
+    q = question.lower().strip()
+
+    # --------------------------------------------------------
+    # TOTAL SPENDING
+    # --------------------------------------------------------
+
+    if any(
+        phrase in q
+        for phrase in [
+            "total spending",
+            "total spent",
+            "total expense",
+            "total expenses",
+            "how much did i spend",
+            "how much have i spent"
+        ]
+    ):
+        return (
+            f"Your total spending is "
+            f"₹{total_expenses:,.2f}."
+        )
+
+    # --------------------------------------------------------
+    # TOTAL INCOME
+    # --------------------------------------------------------
+
+    if any(
+        phrase in q
+        for phrase in [
+            "total income",
+            "my income",
+            "how much did i earn",
+            "how much have i earned"
+        ]
+    ):
+        return (
+            f"Your total income is "
+            f"₹{total_income:,.2f}."
+        )
+
+    # --------------------------------------------------------
+    # SAVINGS
+    # --------------------------------------------------------
+
+    if any(
+        phrase in q
+        for phrase in [
+            "total savings",
+            "my savings",
+            "how much did i save",
+            "how much have i saved"
+        ]
+    ):
+        return (
+            f"Your total savings are "
+            f"₹{total_savings:,.2f}, "
+            f"with a savings rate of "
+            f"{savings_rate:.2f}%."
+        )
+
+    # --------------------------------------------------------
+    # SAVINGS RATE
+    # --------------------------------------------------------
+
+    if any(
+        phrase in q
+        for phrase in [
+            "savings rate",
+            "saving rate",
+            "percentage saved"
+        ]
+    ):
+        return (
+            f"Your savings rate is "
+            f"{savings_rate:.2f}%."
+        )
+
+    # --------------------------------------------------------
+    # HIGHEST SPENDING CATEGORY
+    # --------------------------------------------------------
+
+    if any(
+        phrase in q
+        for phrase in [
+            "highest spending category",
+            "highest expense category",
+            "most expensive category",
+            "where do i spend the most",
+            "where am i spending the most"
+        ]
+    ):
+        category = category_expenses.index[0]
+        amount = category_expenses.iloc[0]
+
+        return (
+            f"Your highest spending category is "
+            f"{category}, with spending of "
+            f"₹{amount:,.2f}."
+        )
+
+    # --------------------------------------------------------
+    # CATEGORY-SPECIFIC SPENDING
+    # --------------------------------------------------------
+
+    for category in category_expenses.index:
+
+        if category.lower() in q:
+
+            amount = category_expenses[category]
+
+            return (
+                f"You spent "
+                f"₹{amount:,.2f} on "
+                f"{category}."
+            )
+
+    # --------------------------------------------------------
+    # LARGEST TRANSACTION
+    # --------------------------------------------------------
+
+    if any(
+        phrase in q
+        for phrase in [
+            "largest transaction",
+            "biggest transaction",
+            "highest transaction",
+            "most expensive transaction"
+        ]
+    ):
+        return (
+            f"Your largest expense was "
+            f"{largest_transaction['description']} "
+            f"for ₹{largest_transaction['amount']:,.2f} "
+            f"in the {largest_transaction['category']} category."
+        )
 
     # --------------------------------------------------------
     # MONTHLY SPENDING
     # --------------------------------------------------------
 
-    expense_df["month"] = (
-        expense_df["date"]
-        .dt.to_period("M")
-        .astype(str)
+    for month in monthly_expenses.index:
+
+        month_name = pd.to_datetime(
+            month
+        ).strftime("%B").lower()
+
+        if month_name in q or month in q:
+
+            amount = monthly_expenses[month]
+
+            return (
+                f"Your total spending in "
+                f"{pd.to_datetime(month).strftime('%B %Y')} "
+                f"was ₹{amount:,.2f}."
+            )
+
+    # --------------------------------------------------------
+    # DEFAULT CLOUD RESPONSE
+    # --------------------------------------------------------
+
+    return (
+        "I can answer questions about your "
+        "total income, total spending, savings, "
+        "savings rate, spending categories, "
+        "monthly expenses, and largest transactions."
+    )
+
+
+# ============================================================
+# FINANCIAL CONTEXT FOR LOCAL AI
+# ============================================================
+
+def build_financial_context():
+
+    df = load_transactions()
+
+    income_df = df[df["type"] == "income"].copy()
+    expense_df = df[df["type"] == "expense"].copy()
+
+    total_income = income_df["amount"].sum()
+    total_expenses = expense_df["amount"].sum()
+    total_savings = total_income - total_expenses
+
+    savings_rate = (
+        (total_savings / total_income) * 100
+        if total_income > 0
+        else 0
+    )
+
+    category_expenses = (
+        expense_df
+        .groupby("category")["amount"]
+        .sum()
+        .sort_values(ascending=False)
     )
 
     monthly_expenses = (
         expense_df
+        .assign(month=expense_df["date"].dt.to_period("M").astype(str))
         .groupby("month")["amount"]
         .sum()
     )
 
-    monthly_text = "\n".join(
-        [
-            f"{month}: ₹{amount:,.2f}"
-            for month, amount
-            in monthly_expenses.items()
-        ]
+    category_text = "\n".join(
+        f"{category}: ₹{amount:,.2f}"
+        for category, amount in category_expenses.items()
     )
 
-    # --------------------------------------------------------
-    # TRANSACTION DATA
-    # --------------------------------------------------------
+    monthly_text = "\n".join(
+        f"{month}: ₹{amount:,.2f}"
+        for month, amount in monthly_expenses.items()
+    )
 
-    transaction_text = expense_df[
+    transactions = expense_df[
         [
             "date",
             "description",
@@ -140,31 +297,17 @@ def build_financial_context():
         ]
     ].copy()
 
-    transaction_text["date"] = (
-        transaction_text["date"]
-        .dt.strftime("%Y-%m-%d")
+    transactions["date"] = transactions["date"].dt.strftime(
+        "%Y-%m-%d"
     )
 
-    transaction_text["amount"] = (
-        transaction_text["amount"]
-        .map(
-            lambda x:
-            f"₹{x:,.2f}"
-        )
+    transactions["amount"] = transactions["amount"].map(
+        lambda x: f"₹{x:,.2f}"
     )
 
-    transactions = (
-        transaction_text
-        .to_string(
-            index=False
-        )
-    )
+    transaction_text = transactions.to_string(index=False)
 
-    # --------------------------------------------------------
-    # FINAL CONTEXT
-    # --------------------------------------------------------
-
-    context = f"""
+    return f"""
 FinSight AI Financial Data
 
 ========== FINANCIAL SUMMARY ==========
@@ -194,21 +337,15 @@ Savings Rate:
 
 ========== EXPENSE TRANSACTIONS ==========
 
-{transactions}
+{transaction_text}
 """
-
-    return context
 
 
 # ============================================================
-# ASK AI
+# LOCAL QWEN3
 # ============================================================
 
 def ask_ai(question):
-
-    # --------------------------------------------------------
-    # CHECK AI AVAILABILITY
-    # --------------------------------------------------------
 
     cloud_mode = (
         os.getenv(
@@ -217,62 +354,25 @@ def ask_ai(question):
         ).lower() == "true"
     )
 
+    # Cloud deployment
     if cloud_mode:
+        return answer_cloud_question(question)
 
-        return (
-            "FinSight AI's local Qwen3 model is "
-            "available when running FinSight AI locally. "
-            "The cloud deployment currently provides "
-            "the analytics and machine-learning features."
-        )
-
-    # --------------------------------------------------------
-    # BUILD CONTEXT
-    # --------------------------------------------------------
-
-    financial_context = (
-        build_financial_context()
-    )
-
-    # --------------------------------------------------------
-    # AI PROMPT
-    # --------------------------------------------------------
+    # Local Qwen3
+    financial_context = build_financial_context()
 
     prompt = f"""
 You are FinSight AI, a personal finance
 analysis assistant.
 
-Your job is to answer questions using ONLY
-the financial data provided below.
+Answer using ONLY the financial data below.
 
-IMPORTANT RULES:
+Do not invent information.
 
-1. Do not invent financial information.
+Keep the answer concise and informative.
 
-2. Do not assume transactions that are
-   not present.
-
-3. Use transaction-level data when the
-   question requires specific transactions.
-
-4. Use category and monthly summaries when
-   they are sufficient.
-
-5. If the requested information is not
-   available, clearly say that it is not
-   available in the data.
-
-6. Perform calculations carefully when
-   necessary.
-
-7. Keep responses concise but informative.
-
-8. When mentioning money, use Indian
-   Rupee formatting such as ₹18,000.
-
-9. Do not give generic financial advice
-   unless the user specifically asks
-   for advice.
+When mentioning money, use Indian Rupee
+formatting such as ₹18,000.
 
 FINANCIAL DATA:
 
@@ -282,13 +382,8 @@ USER QUESTION:
 
 {question}
 
-Answer the user's question using the
-financial data above.
+Answer the user's question.
 """
-
-    # --------------------------------------------------------
-    # LOCAL QWEN3
-    # --------------------------------------------------------
 
     response = ollama.chat(
         model="qwen3:8b",
@@ -300,20 +395,12 @@ financial data above.
         ]
     )
 
-    return response[
-        "message"
-    ][
-        "content"
-    ]
+    return response["message"]["content"]
 
 
 # ============================================================
-# API COMPATIBILITY FUNCTION
+# API FUNCTION
 # ============================================================
 
 def ask_question(question):
-    """
-    API-compatible wrapper used by backend.app.
-    """
-
     return ask_ai(question)
