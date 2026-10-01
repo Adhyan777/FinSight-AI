@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 from pathlib import Path
 import sys
 import importlib
@@ -52,6 +53,18 @@ import ai_assistant
 # ============================================================
 
 app = Flask(__name__)
+
+# Allow the deployed Vercel frontend to communicate with Flask
+CORS(
+    app,
+    resources={
+        r"/api/*": {
+            "origins": [
+                "https://fin-sight-ai-ten-mu.vercel.app"
+            ]
+        }
+    }
+)
 
 
 # ============================================================
