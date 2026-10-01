@@ -1,3 +1,5 @@
+const API_BASE_URL = "https://finsight-ai-2inl.onrender.com";
+
 import { useEffect, useMemo, useState } from 'react'
 import {
   LineChart,
