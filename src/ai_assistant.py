@@ -9,101 +9,37 @@ from database import get_connection
 # LOAD TRANSACTIONS FROM DATABASE
 # ============================================================
 
-connection = get_connection()
+def load_transactions():
+    connection = get_connection()
 
-df = pd.read_sql_query(
-    """
-    SELECT
-        date,
-        description,
-        category,
-        type,
-        amount,
-        payment_method
-    FROM transactions
-    """,
-    connection
-)
+    try:
+        df = pd.read_sql_query(
+            """
+            SELECT
+                date,
+                description,
+                category,
+                type,
+                amount,
+                payment_method
+            FROM transactions
+            """,
+            connection
+        )
+    finally:
+        connection.close()
 
-connection.close()
-
-
-# ============================================================
-# PREPARE DATA
-# ============================================================
-
-df["date"] = pd.to_datetime(
-    df["date"],
-    errors="coerce"
-)
-
-df["amount"] = pd.to_numeric(
-    df["amount"],
-    errors="coerce"
-)
-
-
-# ============================================================
-# SEPARATE INCOME AND EXPENSES
-# ============================================================
-
-income_df = df[
-    df["type"] == "income"
-].copy()
-
-expense_df = df[
-    df["type"] == "expense"
-].copy()
-
-
-# ============================================================
-# FINANCIAL SUMMARY
-# ============================================================
-
-total_income = income_df["amount"].sum()
-
-total_expenses = expense_df["amount"].sum()
-
-total_savings = (
-    total_income - total_expenses
-)
-
-savings_rate = (
-    (total_savings / total_income) * 100
-    if total_income > 0
-    else 0
-)
-
-
-# ============================================================
-# CATEGORY SPENDING
-# ============================================================
-
-category_expenses = (
-    expense_df
-    .groupby("category")["amount"]
-    .sum()
-    .sort_values(
-        ascending=False
+    df["date"] = pd.to_datetime(
+        df["date"],
+        errors="coerce"
     )
-)
 
+    df["amount"] = pd.to_numeric(
+        df["amount"],
+        errors="coerce"
+    )
 
-# ============================================================
-# MONTHLY SPENDING
-# ============================================================
-
-expense_df["month"] = (
-    expense_df["date"]
-    .dt.to_period("M")
-    .astype(str)
-)
-
-monthly_expenses = (
-    expense_df
-    .groupby("month")["amount"]
-    .sum()
-)
+    return df
 
 
 # ============================================================
@@ -112,23 +48,86 @@ monthly_expenses = (
 
 def build_financial_context():
 
+    df = load_transactions()
+
+    # --------------------------------------------------------
+    # SEPARATE INCOME AND EXPENSES
+    # --------------------------------------------------------
+
+    income_df = df[
+        df["type"] == "income"
+    ].copy()
+
+    expense_df = df[
+        df["type"] == "expense"
+    ].copy()
+
+    # --------------------------------------------------------
+    # FINANCIAL SUMMARY
+    # --------------------------------------------------------
+
+    total_income = income_df["amount"].sum()
+
+    total_expenses = expense_df["amount"].sum()
+
+    total_savings = (
+        total_income - total_expenses
+    )
+
+    savings_rate = (
+        (total_savings / total_income) * 100
+        if total_income > 0
+        else 0
+    )
+
+    # --------------------------------------------------------
+    # CATEGORY SPENDING
+    # --------------------------------------------------------
+
+    category_expenses = (
+        expense_df
+        .groupby("category")["amount"]
+        .sum()
+        .sort_values(
+            ascending=False
+        )
+    )
+
     category_text = "\n".join(
         [
             f"{category}: ₹{amount:,.2f}"
-
             for category, amount
             in category_expenses.items()
         ]
     )
 
+    # --------------------------------------------------------
+    # MONTHLY SPENDING
+    # --------------------------------------------------------
+
+    expense_df["month"] = (
+        expense_df["date"]
+        .dt.to_period("M")
+        .astype(str)
+    )
+
+    monthly_expenses = (
+        expense_df
+        .groupby("month")["amount"]
+        .sum()
+    )
+
     monthly_text = "\n".join(
         [
             f"{month}: ₹{amount:,.2f}"
-
             for month, amount
             in monthly_expenses.items()
         ]
     )
+
+    # --------------------------------------------------------
+    # TRANSACTION DATA
+    # --------------------------------------------------------
 
     transaction_text = expense_df[
         [
@@ -160,6 +159,10 @@ def build_financial_context():
             index=False
         )
     )
+
+    # --------------------------------------------------------
+    # FINAL CONTEXT
+    # --------------------------------------------------------
 
     context = f"""
 FinSight AI Financial Data
@@ -223,7 +226,6 @@ def ask_ai(question):
             "the analytics and machine-learning features."
         )
 
-
     # --------------------------------------------------------
     # BUILD CONTEXT
     # --------------------------------------------------------
@@ -231,7 +233,6 @@ def ask_ai(question):
     financial_context = (
         build_financial_context()
     )
-
 
     # --------------------------------------------------------
     # AI PROMPT
@@ -285,22 +286,18 @@ Answer the user's question using the
 financial data above.
 """
 
-
     # --------------------------------------------------------
     # LOCAL QWEN3
     # --------------------------------------------------------
 
     response = ollama.chat(
-
         model="qwen3:8b",
-
         messages=[
             {
                 "role": "user",
                 "content": prompt
             }
         ]
-
     )
 
     return response[
@@ -308,3 +305,15 @@ financial data above.
     ][
         "content"
     ]
+
+
+# ============================================================
+# API COMPATIBILITY FUNCTION
+# ============================================================
+
+def ask_question(question):
+    """
+    API-compatible wrapper used by backend.app.
+    """
+
+    return ask_ai(question)
