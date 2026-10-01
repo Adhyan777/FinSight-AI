@@ -19,7 +19,7 @@ function App() {
   const [analytics, setAnalytics] = useState(null)
   const [anomalies, setAnomalies] = useState([])
   const [forecast, setForecast] = useState(null)
-  const [clusters, setClusters] = useState(null)
+  const [clusters, setClusters] = useState([])
   const [transactions, setTransactions] = useState([])
 
   const [error, setError] = useState('')
@@ -35,7 +35,6 @@ function App() {
 
   const [fileInputKey, setFileInputKey] = useState(0)
 
-  // Transaction filters
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
@@ -59,7 +58,7 @@ function App() {
         if (!response.ok) throw new Error()
         return response.json()
       })
-      .then((data) => setAnomalies(data))
+      .then((data) => setAnomalies(Array.isArray(data) ? data : []))
       .catch(() => console.log('Unable to load anomaly data.'))
 
     fetch(`${API_BASE_URL}/api/forecast`)
@@ -75,7 +74,7 @@ function App() {
         if (!response.ok) throw new Error()
         return response.json()
       })
-      .then((data) => setClusters(data))
+      .then((data) => setClusters(Array.isArray(data) ? data : []))
       .catch(() => console.log('Unable to load clustering data.'))
 
     fetch(`${API_BASE_URL}/api/transactions`)
@@ -83,7 +82,15 @@ function App() {
         if (!response.ok) throw new Error()
         return response.json()
       })
-      .then((data) => setTransactions(data))
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setTransactions(data)
+        } else if (Array.isArray(data.transactions)) {
+          setTransactions(data.transactions)
+        } else {
+          setTransactions([])
+        }
+      })
       .catch(() => console.log('Unable to load transactions.'))
   }
 
@@ -208,20 +215,18 @@ function App() {
   const filteredTransactions = useMemo(() => {
     let result = [...transactions]
 
-    // Search
     if (searchTerm.trim()) {
       const search = searchTerm
         .toLowerCase()
         .trim()
 
       result = result.filter((transaction) =>
-        transaction.description
+        String(transaction.description || '')
           .toLowerCase()
           .includes(search)
       )
     }
 
-    // Category filter
     if (categoryFilter !== 'all') {
       result = result.filter(
         (transaction) =>
@@ -229,7 +234,6 @@ function App() {
       )
     }
 
-    // Type filter
     if (typeFilter !== 'all') {
       result = result.filter(
         (transaction) =>
@@ -237,22 +241,21 @@ function App() {
       )
     }
 
-    // Sorting
     result.sort((a, b) => {
       if (sortBy === 'date-desc') {
-        return b.date.localeCompare(a.date)
+        return String(b.date).localeCompare(String(a.date))
       }
 
       if (sortBy === 'date-asc') {
-        return a.date.localeCompare(b.date)
+        return String(a.date).localeCompare(String(b.date))
       }
 
       if (sortBy === 'amount-desc') {
-        return b.amount - a.amount
+        return Number(b.amount) - Number(a.amount)
       }
 
       if (sortBy === 'amount-asc') {
-        return a.amount - b.amount
+        return Number(a.amount) - Number(b.amount)
       }
 
       return 0
@@ -352,27 +355,36 @@ function App() {
     )
   }
 
-  const monthlySpendingData = Object.entries(
+  // ==========================================================
+  // CHART DATA
+  // ==========================================================
+
+  const monthlySpendingData = Array.isArray(
     analytics.monthly_expenses
-  ).map(([month, amount]) => ({
-    month: month.substring(5),
-    expenses: amount,
-    income: analytics.total_income / 6,
-  }))
+  )
+    ? analytics.monthly_expenses.map((item) => ({
+        month: String(item.month).substring(5),
+        expenses: Number(item.amount),
+        income: Number(analytics.total_income) / 6,
+      }))
+    : []
 
-  const categorySpendingData = Object.entries(
+  const categorySpendingData = Array.isArray(
     analytics.category_expenses
-  ).map(([category, amount]) => ({
-    category,
-    amount,
-  }))
+  )
+    ? analytics.category_expenses.map((item) => ({
+        category: item.category,
+        amount: Number(item.amount),
+      }))
+    : []
 
-  const clusterChartData =
-    clusters?.summary.map((cluster) => ({
-      cluster: `Cluster ${cluster.cluster}`,
-      average: cluster.mean,
-      count: cluster.count,
-    })) || []
+  const clusterChartData = Array.isArray(clusters)
+    ? clusters.map((cluster) => ({
+        cluster: `Cluster ${cluster.cluster}`,
+        average: Number(cluster.mean),
+        count: Number(cluster.count),
+      }))
+    : []
 
   return (
     <div className="app">
@@ -393,7 +405,6 @@ function App() {
         </div>
       </nav>
 
-
       <main>
 
         {/* ===================================================
@@ -401,9 +412,7 @@ function App() {
         =================================================== */}
 
         <section className="hero" id="dashboard">
-
           <div>
-
             <p className="eyebrow">
               PERSONAL FINANCE INTELLIGENCE
             </p>
@@ -449,11 +458,8 @@ function App() {
             {uploadError && (
               <p>{uploadError}</p>
             )}
-
           </div>
-
         </section>
-
 
         {/* ===================================================
             OVERVIEW
@@ -476,9 +482,9 @@ function App() {
 
               <h3>
                 ₹
-                {analytics.total_income.toLocaleString(
-                  'en-IN'
-                )}
+                {Number(
+                  analytics.total_income
+                ).toLocaleString('en-IN')}
               </h3>
             </div>
 
@@ -487,9 +493,9 @@ function App() {
 
               <h3>
                 ₹
-                {analytics.total_expenses.toLocaleString(
-                  'en-IN'
-                )}
+                {Number(
+                  analytics.total_expenses
+                ).toLocaleString('en-IN')}
               </h3>
             </div>
 
@@ -498,9 +504,9 @@ function App() {
 
               <h3>
                 ₹
-                {analytics.total_savings.toLocaleString(
-                  'en-IN'
-                )}
+                {Number(
+                  analytics.total_savings
+                ).toLocaleString('en-IN')}
               </h3>
             </div>
 
@@ -508,14 +514,15 @@ function App() {
               <span>Savings Rate</span>
 
               <h3>
-                {analytics.savings_rate}%
+                {Number(
+                  analytics.savings_rate
+                ).toFixed(2)}%
               </h3>
             </div>
 
           </div>
 
         </section>
-
 
         {/* ===================================================
             ANALYTICS
@@ -533,7 +540,6 @@ function App() {
           <h2>
             See where your money goes.
           </h2>
-
 
           <div className="analytics-grid">
 
@@ -582,7 +588,6 @@ function App() {
               </ResponsiveContainer>
 
             </div>
-
 
             <div className="chart-placeholder">
 
@@ -637,7 +642,6 @@ function App() {
             </div>
 
           </div>
-
 
           <div className="analytics-grid">
 
@@ -706,7 +710,6 @@ function App() {
 
           </div>
 
-
           <div className="analytics-grid">
 
             <div className="chart-placeholder">
@@ -715,7 +718,7 @@ function App() {
                 Spending Behavior Clusters
               </h3>
 
-              {clusters ? (
+              {clusters.length > 0 ? (
 
                 <ResponsiveContainer
                   width="100%"
@@ -737,26 +740,19 @@ function App() {
                     <YAxis />
 
                     <Tooltip
-                      formatter={(
-                        value,
-                        name
-                      ) => {
+                      formatter={(value, name) => {
 
                         if (
-                          name ===
-                          'average'
+                          name === 'Average Transaction'
                         ) {
-
                           return `₹${Number(
                             value
                           ).toLocaleString(
                             'en-IN'
                           )}`
-
                         }
 
                         return value
-
                       }}
                     />
 
@@ -791,7 +787,6 @@ function App() {
 
         </section>
 
-
         {/* ===================================================
             TRANSACTIONS
         =================================================== */}
@@ -809,10 +804,7 @@ function App() {
             Your transaction history.
           </h2>
 
-
           <div className="insight-card">
-
-            {/* FILTER CONTROLS */}
 
             <div
               style={{
@@ -823,8 +815,6 @@ function App() {
                 marginBottom: '20px'
               }}
             >
-
-              {/* SEARCH */}
 
               <input
                 type="text"
@@ -841,9 +831,6 @@ function App() {
                   border: '1px solid #ccc'
                 }}
               />
-
-
-              {/* CATEGORY */}
 
               <select
                 value={categoryFilter}
@@ -878,9 +865,6 @@ function App() {
 
               </select>
 
-
-              {/* TYPE */}
-
               <select
                 value={typeFilter}
                 onChange={(event) =>
@@ -908,9 +892,6 @@ function App() {
                 </option>
 
               </select>
-
-
-              {/* SORT */}
 
               <select
                 value={sortBy}
@@ -946,9 +927,6 @@ function App() {
 
             </div>
 
-
-            {/* RESULT COUNT */}
-
             <p>
               Showing{' '}
               <strong>
@@ -960,9 +938,6 @@ function App() {
               </strong>{' '}
               transactions
             </p>
-
-
-            {/* TABLE */}
 
             {filteredTransactions.length === 0 ? (
 
@@ -1049,7 +1024,6 @@ function App() {
 
                   </thead>
 
-
                   <tbody>
 
                     {filteredTransactions.map(
@@ -1067,9 +1041,7 @@ function App() {
                               padding: '12px'
                             }}
                           >
-                            {
-                              transaction.date
-                            }
+                            {transaction.date}
                           </td>
 
                           <td
@@ -1077,9 +1049,7 @@ function App() {
                               padding: '12px'
                             }}
                           >
-                            {
-                              transaction.description
-                            }
+                            {transaction.description}
                           </td>
 
                           <td
@@ -1087,9 +1057,7 @@ function App() {
                               padding: '12px'
                             }}
                           >
-                            {
-                              transaction.category
-                            }
+                            {transaction.category}
                           </td>
 
                           <td
@@ -1097,9 +1065,7 @@ function App() {
                               padding: '12px'
                             }}
                           >
-                            {
-                              transaction.type
-                            }
+                            {transaction.type}
                           </td>
 
                           <td
@@ -1109,7 +1075,9 @@ function App() {
                             }}
                           >
                             ₹
-                            {transaction.amount.toLocaleString(
+                            {Number(
+                              transaction.amount
+                            ).toLocaleString(
                               'en-IN'
                             )}
                           </td>
@@ -1119,9 +1087,7 @@ function App() {
                               padding: '12px'
                             }}
                           >
-                            {
-                              transaction.payment_method
-                            }
+                            {transaction.payment_method}
                           </td>
 
                         </tr>
@@ -1141,7 +1107,6 @@ function App() {
 
         </section>
 
-
         {/* ===================================================
             AI INSIGHTS
         =================================================== */}
@@ -1159,28 +1124,22 @@ function App() {
             Insights from your data.
           </h2>
 
-
           <div className="insight-card">
 
             <h3>
               Highest spending category:{' '}
-              {
-                analytics
-                  .highest_spending_category
-                  .category
-              }
+              {analytics.highest_category}
             </h3>
 
             <p>
               Total spending in this category:{' '}
               <strong>
                 ₹
-                {analytics
-                  .highest_spending_category
-                  .amount
-                  .toLocaleString(
-                    'en-IN'
-                  )}
+                {Number(
+                  analytics.highest_category_amount
+                ).toLocaleString(
+                  'en-IN'
+                )}
               </strong>
             </p>
 
@@ -1194,16 +1153,16 @@ function App() {
                 }
               </strong>{' '}
               — ₹
-              {analytics
-                .largest_transaction
-                .amount
-                .toLocaleString(
-                  'en-IN'
-                )}
+              {Number(
+                analytics
+                  .largest_transaction
+                  .amount
+              ).toLocaleString(
+                'en-IN'
+              )}
             </p>
 
           </div>
-
 
           <div className="insight-card">
 
@@ -1236,38 +1195,32 @@ function App() {
                       <p>
 
                         <strong>
-                          {
-                            anomaly.description
-                          }
+                          {anomaly.description}
                         </strong>
 
                         <br />
 
                         Date:{' '}
-                        {
-                          anomaly.date
-                        }
+                        {anomaly.date}
 
                         <br />
 
                         Category:{' '}
-                        {
-                          anomaly.category
-                        }
+                        {anomaly.category}
 
                         <br />
 
                         Amount: ₹
-                        {anomaly.amount.toLocaleString(
+                        {Number(
+                          anomaly.amount
+                        ).toLocaleString(
                           'en-IN'
                         )}
 
                         <br />
 
                         Payment Method:{' '}
-                        {
-                          anomaly.payment_method
-                        }
+                        {anomaly.payment_method}
 
                       </p>
 
@@ -1288,7 +1241,6 @@ function App() {
 
           </div>
 
-
           <div className="insight-card">
 
             <h3>
@@ -1305,7 +1257,9 @@ function App() {
 
                 <h3>
                   ₹
-                  {forecast.predicted_expense.toLocaleString(
+                  {Number(
+                    forecast.forecast
+                  ).toLocaleString(
                     'en-IN',
                     {
                       minimumFractionDigits: 2,
@@ -1332,14 +1286,13 @@ function App() {
 
           </div>
 
-
           <div className="insight-card">
 
             <h3>
               Spending Behavior
             </h3>
 
-            {clusters ? (
+            {clusters.length > 0 ? (
 
               <>
 
@@ -1352,7 +1305,7 @@ function App() {
                   using K-Means clustering.
                 </p>
 
-                {clusters.summary.map(
+                {clusters.map(
                   (
                     cluster
                   ) => (
@@ -1382,7 +1335,9 @@ function App() {
                         <br />
 
                         Average transaction: ₹
-                        {cluster.mean.toLocaleString(
+                        {Number(
+                          cluster.mean
+                        ).toLocaleString(
                           'en-IN',
                           {
                             maximumFractionDigits: 2
@@ -1392,11 +1347,15 @@ function App() {
                         <br />
 
                         Range: ₹
-                        {cluster.min.toLocaleString(
+                        {Number(
+                          cluster.min
+                        ).toLocaleString(
                           'en-IN'
                         )}{' '}
                         – ₹
-                        {cluster.max.toLocaleString(
+                        {Number(
+                          cluster.max
+                        ).toLocaleString(
                           'en-IN'
                         )}
 
@@ -1420,7 +1379,6 @@ function App() {
           </div>
 
         </section>
-
 
         {/* ===================================================
             ASK AI
@@ -1522,5 +1480,3 @@ function App() {
 }
 
 export default App
-
-
