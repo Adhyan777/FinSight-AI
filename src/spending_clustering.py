@@ -7,147 +7,145 @@ from database import get_connection
 
 
 # ============================================================
-# LOAD TRANSACTIONS FROM DATABASE
+# LOAD TRANSACTIONS
 # ============================================================
 
-connection = get_connection()
+def load_transactions():
 
-df = pd.read_sql_query(
-    """
-    SELECT
-        date,
-        description,
-        category,
-        type,
-        amount,
-        payment_method
-    FROM transactions
-    """,
-    connection
-)
+    connection = get_connection()
 
-connection.close()
+    try:
+        df = pd.read_sql_query(
+            """
+            SELECT
+                date,
+                description,
+                category,
+                type,
+                amount,
+                payment_method
+            FROM transactions
+            """,
+            connection
+        )
+    finally:
+        connection.close()
 
+    df["date"] = pd.to_datetime(
+        df["date"],
+        errors="coerce"
+    )
 
-# ============================================================
-# PREPARE DATA
-# ============================================================
+    df["amount"] = pd.to_numeric(
+        df["amount"],
+        errors="coerce"
+    )
 
-df["date"] = pd.to_datetime(
-    df["date"],
-    errors="coerce"
-)
-
-df["amount"] = pd.to_numeric(
-    df["amount"],
-    errors="coerce"
-)
-
-
-# ============================================================
-# EXPENSE TRANSACTIONS
-# ============================================================
-
-expense_df = df[
-    df["type"] == "expense"
-].copy()
+    return df
 
 
 # ============================================================
-# FEATURES
+# SPENDING CLUSTERING
 # ============================================================
 
-X = expense_df[
-    ["amount"]
-]
+def cluster_spending():
 
+    df = load_transactions()
 
-# ============================================================
-# SCALE FEATURES
-# ============================================================
+    expense_df = df[
+        df["type"] == "expense"
+    ].copy()
 
-scaler = StandardScaler()
+    if expense_df.empty:
+        return []
 
-X_scaled = scaler.fit_transform(
-    X
-)
+    X = expense_df[["amount"]]
 
+    # K-Means with 3 clusters requires at least 3 records
+    if len(expense_df) < 3:
+        return []
 
-# ============================================================
-# K-MEANS CLUSTERING
-# ============================================================
+    # ========================================================
+    # SCALE FEATURES
+    # ========================================================
 
-model = KMeans(
-    n_clusters=3,
-    random_state=42,
-    n_init=10
-)
+    scaler = StandardScaler()
 
+    X_scaled = scaler.fit_transform(X)
 
-expense_df["cluster"] = (
-    model.fit_predict(
+    # ========================================================
+    # K-MEANS
+    # ========================================================
+
+    n_clusters = min(
+        3,
+        len(expense_df)
+    )
+
+    model = KMeans(
+        n_clusters=n_clusters,
+        random_state=42,
+        n_init=10
+    )
+
+    expense_df["cluster"] = model.fit_predict(
         X_scaled
     )
-)
 
+    # ========================================================
+    # CLUSTER SUMMARY
+    # ========================================================
 
-# ============================================================
-# CLUSTER SUMMARY
-# ============================================================
-
-cluster_summary = (
-    expense_df
-    .groupby("cluster")["amount"]
-    .agg(
-        [
-            "count",
-            "mean",
-            "min",
-            "max"
-        ]
+    cluster_summary = (
+        expense_df
+        .groupby("cluster")["amount"]
+        .agg(
+            [
+                "count",
+                "mean",
+                "min",
+                "max"
+            ]
+        )
+        .sort_values("mean")
     )
-    .sort_values(
-        "mean"
-    )
-)
+
+    # ========================================================
+    # RETURN API-SAFE DATA
+    # ========================================================
+
+    clusters = []
+
+    for cluster_id, row in cluster_summary.iterrows():
+
+        clusters.append({
+            "cluster": int(cluster_id),
+            "count": int(row["count"]),
+            "mean": float(row["mean"]),
+            "min": float(row["min"]),
+            "max": float(row["max"])
+        })
+
+    return clusters
 
 
 # ============================================================
-# DISPLAY RESULTS
+# LOCAL TEST
 # ============================================================
 
-print(
-    "========== SPENDING BEHAVIOR CLUSTERING =========="
-)
+if __name__ == "__main__":
 
-print(
-    "\nCluster Summary:"
-)
+    clusters = cluster_spending()
 
-print(
-    cluster_summary
-)
-
-
-print(
-    "\n========== TRANSACTIONS WITH CLUSTERS =========="
-)
-
-print(
-    expense_df[
-        [
-            "date",
-            "description",
-            "category",
-            "amount",
-            "cluster"
-        ]
-    ].to_string(
-        index=False
+    print(
+        "========== SPENDING BEHAVIOR CLUSTERING =========="
     )
-)
 
+    print("\nCluster Summary:")
 
-print(
-    "\nSpending clustering completed successfully!"
-)
+    for cluster in clusters:
+        print(cluster)
+
+    print(
+        "\nSpending clustering completed successfully!"
+    )

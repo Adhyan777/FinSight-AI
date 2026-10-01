@@ -7,161 +7,170 @@ from database import get_connection
 
 
 # ============================================================
-# LOAD TRANSACTIONS FROM DATABASE
+# LOAD TRANSACTIONS
 # ============================================================
 
-connection = get_connection()
+def load_transactions():
 
-df = pd.read_sql_query(
-    """
-    SELECT
-        date,
-        description,
-        category,
-        type,
-        amount,
-        payment_method
-    FROM transactions
-    """,
-    connection
-)
+    connection = get_connection()
 
-connection.close()
+    try:
+        df = pd.read_sql_query(
+            """
+            SELECT
+                date,
+                description,
+                category,
+                type,
+                amount,
+                payment_method
+            FROM transactions
+            """,
+            connection
+        )
+    finally:
+        connection.close()
 
+    df["date"] = pd.to_datetime(
+        df["date"],
+        errors="coerce"
+    )
 
-# ============================================================
-# PREPARE DATA
-# ============================================================
+    df["amount"] = pd.to_numeric(
+        df["amount"],
+        errors="coerce"
+    )
 
-df["date"] = pd.to_datetime(
-    df["date"],
-    errors="coerce"
-)
-
-df["amount"] = pd.to_numeric(
-    df["amount"],
-    errors="coerce"
-)
-
-
-# ============================================================
-# EXPENSE TRANSACTIONS
-# ============================================================
-
-expense_df = df[
-    df["type"] == "expense"
-].copy()
+    return df
 
 
 # ============================================================
-# CREATE MONTH COLUMN
+# EXPENSE FORECASTING
 # ============================================================
 
-expense_df["month"] = (
-    expense_df["date"]
-    .dt.to_period("M")
-    .astype(str)
-)
+def forecast_expenses():
 
+    df = load_transactions()
 
-# ============================================================
-# MONTHLY EXPENSES
-# ============================================================
+    expense_df = df[
+        df["type"] == "expense"
+    ].copy()
 
-monthly_expenses = (
-    expense_df
-    .groupby("month")["amount"]
-    .sum()
-    .reset_index()
-)
+    if expense_df.empty:
+        return {
+            "historical": [],
+            "forecast": 0.0
+        }
 
+    expense_df["month"] = (
+        expense_df["date"]
+        .dt.to_period("M")
+        .astype(str)
+    )
 
-# ============================================================
-# CREATE NUMERIC MONTH INDEX
-# ============================================================
+    monthly_expenses = (
+        expense_df
+        .groupby("month")["amount"]
+        .sum()
+        .reset_index()
+        .sort_values("month")
+    )
 
-monthly_expenses["month_index"] = (
-    np.arange(
+    if len(monthly_expenses) == 0:
+        return {
+            "historical": [],
+            "forecast": 0.0
+        }
+
+    # ========================================================
+    # CREATE NUMERIC MONTH INDEX
+    # ========================================================
+
+    monthly_expenses["month_index"] = np.arange(
         len(monthly_expenses)
     )
-)
 
-
-# ============================================================
-# TRAIN FORECASTING MODEL
-# ============================================================
-
-X = monthly_expenses[
-    ["month_index"]
-]
-
-y = monthly_expenses[
-    "amount"
-]
-
-
-model = LinearRegression()
-
-model.fit(
-    X,
-    y
-)
-
-
-# ============================================================
-# PREDICT NEXT MONTH
-# ============================================================
-
-next_month_index = (
-    len(monthly_expenses)
-)
-
-
-predicted_expense = (
-    model.predict(
-        [[next_month_index]]
-    )[0]
-)
-
-
-predicted_expense = max(
-    0,
-    predicted_expense
-)
-
-
-# ============================================================
-# DISPLAY RESULTS
-# ============================================================
-
-print(
-    "========== EXPENSE FORECASTING =========="
-)
-
-print(
-    "\nHistorical Monthly Expenses:"
-)
-
-print(
-    monthly_expenses[
-        [
-            "month",
-            "amount"
-        ]
+    X = monthly_expenses[
+        ["month_index"]
     ]
-)
+
+    y = monthly_expenses[
+        "amount"
+    ]
+
+    # ========================================================
+    # TRAIN MODEL
+    # ========================================================
+
+    if len(monthly_expenses) >= 2:
+
+        model = LinearRegression()
+
+        model.fit(X, y)
+
+        next_month_index = len(
+            monthly_expenses
+        )
+
+        predicted_expense = model.predict(
+            [[next_month_index]]
+        )[0]
+
+    else:
+
+        predicted_expense = (
+            monthly_expenses["amount"].iloc[-1]
+        )
+
+    predicted_expense = max(
+        0,
+        float(predicted_expense)
+    )
+
+    # ========================================================
+    # RETURN API-SAFE DATA
+    # ========================================================
+
+    historical = [
+        {
+            "month": str(row["month"]),
+            "amount": float(row["amount"])
+        }
+        for _, row in monthly_expenses.iterrows()
+    ]
+
+    return {
+        "historical": historical,
+        "forecast": predicted_expense
+    }
 
 
-print(
-    "\nNext Month Expense Forecast:"
-)
+# ============================================================
+# LOCAL TEST
+# ============================================================
 
-print(
-    f"Predicted Expense: "
-    f"₹{predicted_expense:,.2f}"
-)
+if __name__ == "__main__":
 
+    result = forecast_expenses()
 
-print(
-    "\nForecasting model trained successfully!"
-)
+    print(
+        "========== EXPENSE FORECASTING =========="
+    )
+
+    print("\nHistorical Monthly Expenses:")
+
+    for item in result["historical"]:
+        print(item)
+
+    print(
+        "\nNext Month Expense Forecast:"
+    )
+
+    print(
+        f"Predicted Expense: "
+        f"₹{result['forecast']:,.2f}"
+    )
+
+    print(
+        "\nForecasting model trained successfully!"
+    )
