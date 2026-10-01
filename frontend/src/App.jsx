@@ -44,7 +44,7 @@ function App() {
   const loadDashboardData = () => {
     setError('')
 
-    fetch('${API_BASE_URL}/api/analytics')
+    fetch(`${API_BASE_URL}/api/analytics`)
       .then((response) => {
         if (!response.ok) throw new Error()
         return response.json()
@@ -54,7 +54,7 @@ function App() {
         setError('Unable to connect to the FinSight AI backend.')
       )
 
-    fetch('${API_BASE_URL}/api/anomalies')
+    fetch(`${API_BASE_URL}/api/anomalies`)
       .then((response) => {
         if (!response.ok) throw new Error()
         return response.json()
@@ -62,7 +62,7 @@ function App() {
       .then((data) => setAnomalies(data))
       .catch(() => console.log('Unable to load anomaly data.'))
 
-    fetch('${API_BASE_URL}/api/forecast')
+    fetch(`${API_BASE_URL}/api/forecast`)
       .then((response) => {
         if (!response.ok) throw new Error()
         return response.json()
@@ -70,7 +70,7 @@ function App() {
       .then((data) => setForecast(data))
       .catch(() => console.log('Unable to load forecast data.'))
 
-    fetch('${API_BASE_URL}/api/clusters')
+    fetch(`${API_BASE_URL}/api/clusters`)
       .then((response) => {
         if (!response.ok) throw new Error()
         return response.json()
@@ -78,7 +78,7 @@ function App() {
       .then((data) => setClusters(data))
       .catch(() => console.log('Unable to load clustering data.'))
 
-    fetch('${API_BASE_URL}/api/transactions')
+    fetch(`${API_BASE_URL}/api/transactions`)
       .then((response) => {
         if (!response.ok) throw new Error()
         return response.json()
@@ -105,7 +105,7 @@ function App() {
 
     try {
       const response = await fetch(
-        '${API_BASE_URL}/api/upload',
+        `${API_BASE_URL}/api/upload`,
         {
           method: 'POST',
           body: formData,
@@ -153,7 +153,7 @@ function App() {
 
     try {
       const response = await fetch(
-        '${API_BASE_URL}/api/ask',
+        `${API_BASE_URL}/api/ask`,
         {
           method: 'POST',
           headers: {
@@ -1522,4 +1522,5 @@ function App() {
 }
 
 export default App
+
 
