@@ -6,194 +6,281 @@ from database import get_connection
 # LOAD TRANSACTIONS FROM DATABASE
 # ============================================================
 
-connection = get_connection()
+def load_transactions():
+    connection = get_connection()
 
-df = pd.read_sql_query(
-    """
-    SELECT
-        date,
-        description,
-        category,
-        type,
-        amount,
-        payment_method
-    FROM transactions
-    """,
-    connection
-)
+    try:
+        df = pd.read_sql_query(
+            """
+            SELECT
+                date,
+                description,
+                category,
+                type,
+                amount,
+                payment_method
+            FROM transactions
+            """,
+            connection
+        )
+    finally:
+        connection.close()
 
-connection.close()
+    # ========================================================
+    # PREPARE DATA
+    # ========================================================
 
-
-# ============================================================
-# PREPARE DATA
-# ============================================================
-
-df["date"] = pd.to_datetime(
-    df["date"],
-    errors="coerce"
-)
-
-df["amount"] = pd.to_numeric(
-    df["amount"],
-    errors="coerce"
-)
-
-
-# ============================================================
-# SEPARATE INCOME AND EXPENSES
-# ============================================================
-
-income_df = df[
-    df["type"] == "income"
-]
-
-expense_df = df[
-    df["type"] == "expense"
-]
-
-
-# ============================================================
-# CORE FINANCIAL METRICS
-# ============================================================
-
-total_income = income_df["amount"].sum()
-
-total_expenses = expense_df["amount"].sum()
-
-total_savings = (
-    total_income - total_expenses
-)
-
-savings_rate = (
-    (total_savings / total_income) * 100
-    if total_income > 0
-    else 0
-)
-
-
-# ============================================================
-# MONTHLY EXPENSES
-# ============================================================
-
-monthly_expenses = (
-    expense_df
-    .assign(
-        month=
-        expense_df["date"]
-        .dt.to_period("M")
-        .astype(str)
+    df["date"] = pd.to_datetime(
+        df["date"],
+        errors="coerce"
     )
-    .groupby("month")["amount"]
-    .sum()
-)
 
-
-# ============================================================
-# CATEGORY EXPENSES
-# ============================================================
-
-category_expenses = (
-    expense_df
-    .groupby("category")["amount"]
-    .sum()
-    .sort_values(
-        ascending=False
+    df["amount"] = pd.to_numeric(
+        df["amount"],
+        errors="coerce"
     )
-)
+
+    return df
 
 
 # ============================================================
-# HIGHEST SPENDING CATEGORY
+# MAIN ANALYTICS FUNCTION
 # ============================================================
 
-highest_category = (
-    category_expenses.index[0]
-)
+def get_analytics():
 
-highest_category_amount = (
-    category_expenses.iloc[0]
-)
+    df = load_transactions()
 
+    # ========================================================
+    # SEPARATE INCOME AND EXPENSES
+    # ========================================================
 
-# ============================================================
-# LARGEST TRANSACTION
-# ============================================================
-
-largest_transaction = (
-    expense_df.loc[
-        expense_df["amount"].idxmax()
+    income_df = df[
+        df["type"] == "income"
     ]
-)
+
+    expense_df = df[
+        df["type"] == "expense"
+    ]
+
+    # ========================================================
+    # CORE FINANCIAL METRICS
+    # ========================================================
+
+    total_income = income_df["amount"].sum()
+
+    total_expenses = expense_df["amount"].sum()
+
+    total_savings = (
+        total_income - total_expenses
+    )
+
+    savings_rate = (
+        (total_savings / total_income) * 100
+        if total_income > 0
+        else 0
+    )
+
+    # ========================================================
+    # MONTHLY EXPENSES
+    # ========================================================
+
+    monthly_expenses = (
+        expense_df
+        .assign(
+            month=(
+                expense_df["date"]
+                .dt.to_period("M")
+                .astype(str)
+            )
+        )
+        .groupby("month")["amount"]
+        .sum()
+    )
+
+    # ========================================================
+    # CATEGORY EXPENSES
+    # ========================================================
+
+    category_expenses = (
+        expense_df
+        .groupby("category")["amount"]
+        .sum()
+        .sort_values(
+            ascending=False
+        )
+    )
+
+    # ========================================================
+    # HIGHEST SPENDING CATEGORY
+    # ========================================================
+
+    if not category_expenses.empty:
+
+        highest_category = (
+            category_expenses.index[0]
+        )
+
+        highest_category_amount = (
+            category_expenses.iloc[0]
+        )
+
+    else:
+
+        highest_category = None
+        highest_category_amount = 0
+
+    # ========================================================
+    # LARGEST TRANSACTION
+    # ========================================================
+
+    if not expense_df.empty:
+
+        largest_transaction = (
+            expense_df.loc[
+                expense_df["amount"].idxmax()
+            ]
+        )
+
+        largest_transaction_data = {
+            "description": str(
+                largest_transaction["description"]
+            ),
+            "amount": float(
+                largest_transaction["amount"]
+            ),
+            "category": str(
+                largest_transaction["category"]
+            )
+        }
+
+    else:
+
+        largest_transaction_data = {
+            "description": None,
+            "amount": 0,
+            "category": None
+        }
+
+    # ========================================================
+    # RETURN API-SAFE DATA
+    # ========================================================
+
+    return {
+        "total_income": float(total_income),
+        "total_expenses": float(total_expenses),
+        "total_savings": float(total_savings),
+        "savings_rate": float(savings_rate),
+
+        "monthly_expenses": [
+            {
+                "month": str(month),
+                "amount": float(amount)
+            }
+            for month, amount
+            in monthly_expenses.items()
+        ],
+
+        "category_expenses": [
+            {
+                "category": str(category),
+                "amount": float(amount)
+            }
+            for category, amount
+            in category_expenses.items()
+        ],
+
+        "highest_category": highest_category,
+        "highest_category_amount": float(
+            highest_category_amount
+        ),
+
+        "largest_transaction":
+            largest_transaction_data
+    }
 
 
 # ============================================================
-# DISPLAY RESULTS
+# LOCAL DISPLAY / TEST
 # ============================================================
 
-print(
-    "========== FINANCIAL ANALYTICS =========="
-)
+if __name__ == "__main__":
 
-print(
-    f"Total Income: ₹{total_income:,.2f}"
-)
+    analytics = get_analytics()
 
-print(
-    f"Total Expenses: ₹{total_expenses:,.2f}"
-)
+    print(
+        "========== FINANCIAL ANALYTICS =========="
+    )
 
-print(
-    f"Total Savings: ₹{total_savings:,.2f}"
-)
+    print(
+        f"Total Income: "
+        f"₹{analytics['total_income']:,.2f}"
+    )
 
-print(
-    f"Savings Rate: {savings_rate:.2f}%"
-)
+    print(
+        f"Total Expenses: "
+        f"₹{analytics['total_expenses']:,.2f}"
+    )
 
-print(
-    "\n========== MONTHLY EXPENSES =========="
-)
+    print(
+        f"Total Savings: "
+        f"₹{analytics['total_savings']:,.2f}"
+    )
 
-print(monthly_expenses)
+    print(
+        f"Savings Rate: "
+        f"{analytics['savings_rate']:.2f}%"
+    )
 
-print(
-    "\n========== CATEGORY EXPENSES =========="
-)
+    print(
+        "\n========== MONTHLY EXPENSES =========="
+    )
 
-print(category_expenses)
+    print(
+        analytics["monthly_expenses"]
+    )
 
-print(
-    "\n========== HIGHEST SPENDING CATEGORY =========="
-)
+    print(
+        "\n========== CATEGORY EXPENSES =========="
+    )
 
-print(
-    f"Category: {highest_category}"
-)
+    print(
+        analytics["category_expenses"]
+    )
 
-print(
-    f"Amount: ₹{highest_category_amount:,.2f}"
-)
+    print(
+        "\n========== HIGHEST SPENDING CATEGORY =========="
+    )
 
-print(
-    "\n========== LARGEST EXPENSE TRANSACTION =========="
-)
+    print(
+        f"Category: "
+        f"{analytics['highest_category']}"
+    )
 
-print(
-    f"Description: "
-    f"{largest_transaction['description']}"
-)
+    print(
+        f"Amount: "
+        f"₹{analytics['highest_category_amount']:,.2f}"
+    )
 
-print(
-    f"Amount: "
-    f"₹{largest_transaction['amount']:,.2f}"
-)
+    print(
+        "\n========== LARGEST EXPENSE TRANSACTION =========="
+    )
 
-print(
-    f"Category: "
-    f"{largest_transaction['category']}"
-)
+    print(
+        f"Description: "
+        f"{analytics['largest_transaction']['description']}"
+    )
 
-print(
-    "\nAnalytics engine completed successfully!"
-)
+    print(
+        f"Amount: "
+        f"₹{analytics['largest_transaction']['amount']:,.2f}"
+    )
+
+    print(
+        f"Category: "
+        f"{analytics['largest_transaction']['category']}"
+    )
+
+    print(
+        "\nAnalytics engine completed successfully!"
+    )
